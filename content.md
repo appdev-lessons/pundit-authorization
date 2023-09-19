@@ -25,7 +25,7 @@ end
 
 The idea is that we want to encapsulate all knowledge about who can do what with a photo inside instance methods within this "policy" class. Let's set up the class to accept a user and a photo when instantiated:
 
-```ruby
+```ruby{4,6-9}
 # app/policies/photo_policy.rb
 
 class PhotoPolicy
@@ -37,7 +37,6 @@ class PhotoPolicy
   end
 end
 ```
-{: mark_lines="4 6-9"}
 
 And now, for example, to figure out who can see a photo, let's define a method called `show?` that will return `true` if the user is allowed to see the photo and `false` if not:
 
@@ -47,7 +46,7 @@ A question mark at the end of a method name doesn't do anything special, functio
 It's a convention among Rubyists to end the names of methods that return `true` or `false` with a question mark, so I'm following that convention here with `show?`.
 </aside>
 
-```ruby
+```ruby{11-18}
 # app/policies/photo_policy.rb
 
 class PhotoPolicy
@@ -68,7 +67,6 @@ class PhotoPolicy
   end
 end
 ```
-{: mark_lines="11-18"}
 
 Let's test it out in `rails console`.
 
@@ -123,14 +121,15 @@ Let's start by locking down access to the `Photos#show` action.
 
 We can start by following a similar technique as before, and utilizing our new policy in a `before_action`:
 
-```ruby
+```ruby{6,21-25}
 # app/controllers/photos_controller.rb
 
 class PhotosController < ApplicationController
   before_action :set_photo, only: %i[ show edit update destroy ]
   before_action :ensure_current_user_is_owner, only: [:destroy, :update, :edit]
   before_action :ensure_user_is_authorized, only: [:show]
-  ...
+  
+  # ...
   private
     # Use callbacks to share common setup or constraints between actions.
     def set_photo
@@ -148,10 +147,9 @@ class PhotosController < ApplicationController
         redirect_back fallback_location: root_url
       end
     end
-  ...
+  # ...
 end
 ```
-{: mark_lines="6 20-24"}
 
 (Mind the `!` before `...show?`; we want to redirect if the user _can't_ view the photo.)
 
@@ -165,32 +163,31 @@ We want to get error messages, because soon you will be setting up error monitor
 
 Pundit provides a specific error message class for exactly this purpose: `Pundit::NotAuthorizedError`.
 
-```ruby
+```ruby{9}
 # app/controllers/photos_controller.rb
 
 class PhotosController < ApplicationController
-  ...
+  # ...
   before_action :ensure_user_is_authorized, only: [:show]
-  ...
+  # ...
     def ensure_user_is_authorized
       if !PhotoPolicy.new(current_user, @photo).show?
         raise Pundit::NotAuthorizedError, "not allowed"
       end
     end
-  ...
+  # ...
 end
 ```
-{: mark_lines="9"}
 
 Test it out by visiting a show page that you shouldn't be able to (you can remove the `/edit` from an edit page to find a URL.)
 
 Great! But what if we don't want to show an error page? Redirecting with a flash message was pretty nice. Well, we can rescue that specific exception in `ApplicationController`:
 
-```ruby
+```ruby{5,7,9-13}
 # app/controllers/application_controller.rb
 
 class ApplicationController
-  ...
+  # ...
   rescue_from Pundit::NotAuthorizedError, with: :user_not_authorized
 
   private
@@ -202,24 +199,22 @@ class ApplicationController
     end
 end
 ```
-{: mark_lines="5 7 9-13"}
 
 Now we have all of the same functionality back, but we're nicely set up to encapsulate all of our authorization logic in one place.
 
-## Convention over configuration in controllers 02:35:00 to 02:38:30
+## Convention over configuration in controllers
 
 So far, Pundit hasn't done anything for us at all, other than providing the exception class that we raised. We wrote all the Ruby ourselves. But now, let's use some some helper methods from Pundit that will allow us to be _very_ concise, if we follow conventional naming.
 
 First, `include Pundit` in `ApplicationController` to gain access to the methods in all of the other controllers:
 
-```ruby
+```ruby{4}
 # app/controllers/application_controller.rb
 
 class ApplicationController
   include Pundit
-...
+# ...
 ```
-{: mark_lines="4"}
 
 Now, we can use the `authorize` method. Instead of all this:
 
@@ -227,33 +222,31 @@ Now, we can use the `authorize` method. Instead of all this:
 # app/controllers/photos_controller.rb
 
 class PhotosController < ApplicationController
-  ...
+  # ...
   before_action :ensure_user_is_authorized, only: [:show]
-  ...
+  # ...
     def ensure_user_is_authorized
       if !PhotoPolicy.new(current_user, @photo).show?
         raise Pundit::NotAuthorizedError, "not allowed"
       end
     end
-  ...
+  # ...
 end
 ```
-{: mark_lines=""}
 
 We can write directly in the `show` action, without any `before_action` step, just this:
 
-```ruby
+```ruby{6}
 # app/controllers/photos_controller.rb
 
 class PhotosController < ApplicationController
-  ...
+  # ...
   def show
     authorize @photo
   end
-  ...
+  # ...
 end
 ```
-{: mark_lines="6"}
 
 🤯 What just happened? When you pass the `authorize` method an instance of `Photo`:
 
@@ -263,7 +256,7 @@ end
  - It calls a method named after the action with a `?` appended on the new policy instance.
  - If it gets back `false`, it raises `Pundit::NotAuthorizedError`.
 
-## Views with Pundit 02:38:30 to 02:42:00
+## Views with Pundit
 
 In view templates, we now have a `policy` helper method that will make it easier to conditionally hide and show things. For example, assuming we define a `show?` method in our user's policy, like so:
 
@@ -285,37 +278,40 @@ class UserPolicy
   end
 end
 ```
-{: mark_lines=""}
 
 Then we can head to the view template and change this conditional:
 
-```erb
+```erb{4}
 <!-- app/views/users/show.html.erb -->
 
-...
+<!-- ... -->
 <% if current_user == @user || !@user.private? || current_user.leaders.include?(@user) %>
-  ...
+  <!-- ... -->
 <% end %>
 ```
-{: mark_lines="4"}
 
 to:
 
-```erb
+```erb{4}
 <!-- app/views/users/show.html.erb -->
 
-...
+<!-- ... -->
 <% if policy(@user).show? %>
-  ...
+  <!-- ... -->
 <% end %>
 ```
-{: mark_lines="4"}
 
 ## Just plain ol' Ruby
 
-Since policies are just POROs, we can bring all our Ruby skills to bear: inheritance, [aliasing](https://medium.com/rubycademy/alias-in-ruby-bf89be245f69){:target="_blank"}, etc.
+Since policies are just POROs, we can bring all our Ruby skills to bear: inheritance, [aliasing](https://medium.com/rubycademy/alias-in-ruby-bf89be245f69), etc.
 
-To start with, we can run the generator `rails g pundit:install` which creates a good starting point policy to inherit from in `app/policies/application_policy.rb`. Take a look and see what you think. If you like it, let's inherit from it:
+To start with, we can run the generator 
+
+```
+rails g pundit:install
+```
+
+which creates a good starting point policy to inherit from in `app/policies/application_policy.rb`. Take a look and see what you think. If you like it, let's inherit from it:
 
 ```ruby
 # app/policies/photo_policy.rb
@@ -323,7 +319,7 @@ To start with, we can run the generator `rails g pundit:install` which creates a
 class PhotoPolicy < ApplicationPolicy
 ```
 
-## Secure by default 02:42:00 02:47:00
+## Secure by default
 
 So — that means that all we need to do from now on is:
 
@@ -336,18 +332,17 @@ Try visiting `/follow_requests` right now — oops! Quite a big security hole, 
 
 Pundit includes a method called `verify_authorized` that we can call in an `after_action` in the `ApplicationController` to help enforce the discipline of pruning our unused routes:
 
-```ruby
+```ruby{6}
 # app/controllers/application_controller.rb
 
 class ApplicationController
   include Pundit
   
   after_action :verify_authorized
-  ...
+  # ...
 ```
-{: mark_lines="6"}
 
-[There's another method called `policy_scope`](https://github.com/varvet/pundit#scopes){:target="_blank"} similar to `authorize` that's used for collections rather than single objects. Usually, you'll want to ensure that either one or the other is called with something like the following in `ApplicationController`:
+[There's another method called `policy_scope`](https://github.com/varvet/pundit#scopes) similar to `authorize` that's used for collections rather than single objects. Usually, you'll want to ensure that either one or the other is called with something like the following in `ApplicationController`:
 
 ```ruby
 # app/controllers/application_controller.rb
@@ -361,4 +356,4 @@ If necessary, you can make the choice to `skip_before_action :verify_authorized`
 
 ## Read more
 
-There's more to Pundit [that you should read about in the README](https://github.com/varvet/pundit){:target="_blank"}, but not a _ton_ more. That's what I like about it — it's relatively lightweight, but gets the job done well. The way that it is structured also plays great with [Rails I18n](https://guides.rubyonrails.org/i18n.html){:target="_blank"} and other libraries. Another powerful tool for your belt.
+There's more to Pundit [that you should read about in the README](https://github.com/varvet/pundit), but not a _ton_ more. That's what I like about it — it's relatively lightweight, but gets the job done well. The way that it is structured also plays great with [Rails I18n](https://guides.rubyonrails.org/i18n.html) and other libraries. Another powerful tool for your belt.
