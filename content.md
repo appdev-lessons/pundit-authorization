@@ -350,6 +350,16 @@ after_action :verify_authorized, except: :index
 after_action :verify_policy_scoped, only: :index
 ```
 
+<div class="bg-blue-100 py-1 px-5" markdown="1">
+
+If your project is setup with Devise accounts, you may need to update the `verify_authorized` method to allow those controllers:
+
+```ruby
+after_action :verify_authorized, unless: :devise_controller?
+after_action :verify_policy_scoped, only: :index, unless: :devise_controller?
+```
+</div>
+
 Now try visiting `/follow_requests` or some other scaffolded route that was insecurely left reachable. You'll see that you can't.
 
 If necessary, you can make the choice to `skip_before_action :verify_authorized` on a case-by-case basis, as we did for `:authenticate_user!`. We are now secure-by-default instead of insecure-by-default.
