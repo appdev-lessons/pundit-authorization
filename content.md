@@ -350,7 +350,7 @@ after_action :verify_authorized, except: :index
 after_action :verify_policy_scoped, only: :index
 ```
 
-<div class="bg-blue-100 py-1 px-5" markdown="1">
+<div class="bg-blue-100 py-1 px-5 bleed-full" markdown="1">
 
 If your project is setup with Devise accounts, you may need to update the `verify_authorized` method to allow those controllers:
 
