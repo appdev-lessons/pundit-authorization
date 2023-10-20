@@ -301,6 +301,17 @@ to:
 <% end %>
 ```
 
+<div class="bg-blue-100 py-1 px-5" markdown="1">
+
+If you are having issues accessing the root URL in your application because it is set to e.g. `users#feed`, then you could add this to your `app/policies/user_policy.rb` file:
+
+```ruby
+def feed?
+  true
+end
+```
+</div>
+
 ## Just plain ol' Ruby
 
 Since policies are just POROs, we can bring all our Ruby skills to bear: inheritance, [aliasing](https://medium.com/rubycademy/alias-in-ruby-bf89be245f69), etc.
